@@ -68,10 +68,33 @@ function pods_cf_capture_entry($config, $form){
 		foreach ( $config['fields'] as $pod_field => $binding ) {
 			if ( ! empty( $binding ) ) {
 				$entry[ $pod_field ] = Caldera_Forms::get_field_data( $binding, $form );
+
+				// process file fields correctly
+				$real_pod_field = $pods->fields($pod_field);
+				if ($real_pod_field["type"] == "file") {
+					$dir = wp_upload_dir();
+
+					// we get URL of the attachment from Caldera
+					// need to convert to file path on the server
+					if ( 0 === strpos( $entry[ $pod_field ], $dir['baseurl'] . '/' ) ) {
+						$path = substr( $entry[ $pod_field ], strlen( $dir['baseurl'] . '/' ) );
+					}
+					$orig_file_path = $dir['basedir'] . "/" . $path;
+					$tmp_file_path = get_temp_dir() . basename($entry[ $pod_field ]);
+
+					// Since Caldera automatically uploads the file into wp-uploads
+					// we need to move uploaded file from wp_uploads to temp file
+					// as pods_attachment_import creates a duplicate otherwise
+					if (file_exists($orig_file_path)&&!is_dir($orig_file_path)&&rename($orig_file_path, $tmp_file_path)) {;
+						$attachment_id = pods_attachment_import($tmp_file_path);
+						if ($attachmend_id) {
+							$entry[ $pod_field ] = $attachment_id;
+							unlink($tmp_file_path);
+						}
+					}
+				}
 			}
-
 		}
-
 	}
 
 
